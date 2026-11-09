@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "novabot": {
+      "command": "C:/path/to/Novabot/.venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "app.mcp_server"
+      ],
+      "env": {
+        "NOVABOT_DATABASE__PATH": "C:/path/to/Novabot/data/novabot.db"
+      }
+    }
+  }
+}

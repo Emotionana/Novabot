@@ -1,0 +1,15 @@
+{
+  "endpoint": "http://127.0.0.1:19100",
+  "platformToken": "",
+  "token": "",
+  "accountId": "",
+  "botName": "",
+  "workspaceRoot": "",
+  "sharedWorkspace": false,
+  "agentPreset": "",
+  "agentTimeoutMs": 600000,
+  "model": {
+    "provider": "",
+    "model": ""
+  }
+}

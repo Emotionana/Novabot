@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "novabot"
+version = "0.1.0"
+description = "Novabot — 独立 bot 应用，记忆 + 人格 + 可插拔模型层"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Novabot" }]
+
+dependencies = [
+  # Web
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "python-multipart>=0.0.12",
+  "Pillow>=11.0",
+  # 桌面窗口（WebView2）
+  "pywebview>=6.2",
+  # 配置
+  "tomli>=2.0; python_version < '3.11'",
+  # HTTP 客户端
+  "httpx>=0.27",
+  # OneBot 连接（onebot.py 里直接 import，之前漏声明）
+  "websockets>=12",
+  # 音频
+  "soundfile>=0.12",
+  # 向量（设计 D5：sqlite-vec 之前先用 numpy 暴力扫）
+  "numpy>=1.26",
+  # 时区（Windows 没有系统 tzdata，zoneinfo 需要这个包）
+  "tzdata>=2025.1; sys_platform == 'win32'",
+  # 工具（预留：web 层还没用上，别急着删）
+  "orjson>=3.10",
+  # 文档解析（PDF/Word）
+  "pypdf>=5.0",
+  "python-docx>=1.1",
+]
+
+[project.optional-dependencies]
+# 向量检索（可选）
+vec = ["sqlite-vec>=0.1.6"]
+# 开发
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.7",
+  "mypy>=1.13",
+]
+
+[project.scripts]
+novabot = "app.main:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# 老的测试脚本是「main() + print」风格：常量大写、局部变量留着方便调试
+"tests/*" = ["N806", "F841", "B007", "B905"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

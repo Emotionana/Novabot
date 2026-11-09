@@ -1,0 +1,114 @@
+# 默认配置。
+#
+# 复制成 local.toml 再改，local.toml 不进版本库。
+
+[server]
+host = "127.0.0.1"
+port = 19100
+reload = false
+log_level = "info"
+
+[database]
+path = "data/novabot.db"
+wal = true
+mmap_mb = 256
+busy_timeout_ms = 5000
+
+# ---------------------------------------------------------------------------
+# 模型
+# ---------------------------------------------------------------------------
+
+[llm]
+default = ""
+fallback = []
+
+# 示例：DeepSeek（OpenAI 兼容）
+# [llm.deepseek]
+# type = "openai_compat"
+# base_url = "https://api.deepseek.com"
+# api_key = "sk-..."
+# model = "deepseek-chat"
+# max_tokens = 8192
+# timeout = 120
+
+# 示例：本地 Ollama
+# [llm.ollama]
+# type = "openai_compat"
+# base_url = "http://127.0.0.1:11434/v1"
+# model = "qwen2.5:14b"
+
+# ---------------------------------------------------------------------------
+# 记忆
+# ---------------------------------------------------------------------------
+
+[memory]
+profile_chars = 240          # 单个人物画像字数上限
+recall_chars = 300           # 上下文总字数上限
+recent_days = 7              # 最近的话取几天
+episode_retention_days = 7   # 原文明细保留天数
+gist_levels = [1, 2, 3]      # 摘要层级：日/周/月
+distill_batch = 20           # 一次蒸馏多少条
+distill_interval_sec = 180   # 蒸馏间隔
+fact_retention_days = 180    # 事实保留期
+similarity_threshold = 0.9   # 判重复的阈值
+walk_depth = 2               # 联想游走步数
+walk_decay = 0.6             # 每步衰减
+walk_min_weight = 0.15       # 剪枝阈值
+
+# ---------------------------------------------------------------------------
+# 人格
+# ---------------------------------------------------------------------------
+
+[persona]
+default = ""
+
+# 人格卡在数据库里建，这里只标默认用哪个
+
+# ---------------------------------------------------------------------------
+# 语音
+# ---------------------------------------------------------------------------
+
+[voice]
+enabled = false
+default_engine = ""
+fallback = []
+
+# 示例：GPT-SoVITS
+# [voice.engines.gptsovits]
+# type = "gptsovits"
+# url = "http://127.0.0.1:9880"
+# timeout = 120
+#
+# 参考音可以写在配置里，启动时自动同步进库（persona_id 留空 = 全局参考音）：
+# [[voice.refs]]
+# id = "mybot-short"
+# name = "短句"
+# engine = "gptsovits"
+# audio_path = "C:\\path\\to\\ref.wav"
+# prompt_text = "参考音频里说的那句话"
+# min_chars = 1
+# max_chars = 8
+# params = { seed = -1, top_k = 5, speed = 1.05 }
+#
+# [[voice.refs]]
+# id = "mybot-calm"
+# name = "平静"
+# audio_path = "C:\\path\\to\\long.wav"
+# prompt_text = "另一段参考音频的文本"
+# min_chars = 9
+# max_chars = 120
+# condition = { any = [{ "state.mood" = "< -0.3" }] }
+
+# ---------------------------------------------------------------------------
+# 接入
+# ---------------------------------------------------------------------------
+
+[gateway]
+enabled = false
+
+# 示例：QQ（SnowLuma / OneBot v11）
+# [gateway.accounts.demo]
+# platform = "qq"
+# bot_qq = ""
+# onebot_url = "ws://127.0.0.1:3001"
+# onebot_token = ""

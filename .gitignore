@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 运行时数据：只保留内置词典 data/dict
+data/*
+!data/dict/
+!data/dict/**
+
+# 本地配置：可能含 API key、端口、本机路径
+config/local.toml
+
+# 本地构建与运行产物
+backups/
+workspaces/
+design/*.zip

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script>
+/* 在首帧之前恢复主题，避免亮色闪一下 */
+try { var t = localStorage.getItem("novabot-theme"); if (t) document.documentElement.dataset.theme = t } catch (e) {}
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Novabot</title>
+<link rel="icon" type="image/png" href="/static/novabot-icon.png?v=20261109-47">
+<link rel="apple-touch-icon" href="/static/novabot-icon.png?v=20261109-47">
+<link rel="stylesheet" href="/static/app.css?v=20261109-47">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark"><img src="/static/novabot-icon.png?v=20261109-47" alt="Novabot"></div>
+    <div class="brand-text">
+      <div class="brand-name">Novabot</div>
+      <div class="brand-sub">记忆 · 人格 · 对话</div>
+    </div>
+  </div>
+  <nav class="nav" id="nav"></nav>
+  <div class="sidebar-foot">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">连接中…</span>
+  </div>
+</aside>
+
+<div class="topbar" id="topbar">
+  <div class="account-switch" id="account-switch"></div>
+  <div class="topbar-right">
+    <button class="btn btn-ghost btn-sm" id="safety-pill" onclick="go('settings')">运行状态</button>
+        <button class="btn btn-ghost btn-sm" onclick="openAccountsModal()">账号</button>
+    <button class="btn btn-ghost btn-sm" onclick="openAccountModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" style="width:13px;height:13px">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      加账号
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="shutdownNovabot()">关闭</button>
+  </div>
+</div>
+
+<main class="main" id="main">
+  <div class="main-inner">
+    <div class="empty">
+      <div class="skeleton" style="width:120px"></div>
+      <div class="skeleton" style="width:200px;height:11px"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/static/app.core.js?v=20261109-47"></script>
+<script src="/static/app.pages.js?v=20261109-47"></script>
+<script src="/static/app.chat.js?v=20261109-47"></script>
+<script src="/static/app.main.js?v=20261109-47"></script>
+</body>
+</html>

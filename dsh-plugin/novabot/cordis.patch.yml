@@ -1,0 +1,5 @@
+# Novabot 插件挂载声明
+# 装法：把整个 dsh-plugin/novabot 目录作为插件包安装/拷入 DSH plugins，重启 DSH。
+- insert:
+    - id: novabot
+      name: dsh-novabot
