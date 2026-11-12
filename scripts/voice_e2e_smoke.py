@@ -42,7 +42,7 @@ from scripts._procutil import cleanup_dir, kill_tree  # noqa: E402
 
 BOT_QQ = "10021"
 USER_QQ = 10001
-GROUP_ID = 573560374
+GROUP_ID = 100001
 
 
 def event(text: str) -> dict:

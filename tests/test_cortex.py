@@ -120,8 +120,8 @@ def main() -> int:
     id5, _ = cortex.write_fact(f5)
     # 再加一条普通的
     f6 = Fact(
-        account_id=ACC, subject_id=QQ, predicate="喜欢", object="示例主题",
-        text="喜欢示例主题", tier=2, valid_from=now,
+        account_id=ACC, subject_id=QQ, predicate="喜欢", object="原神",
+        text="喜欢原神", tier=2, valid_from=now,
     )
     cortex.write_fact(f6)
 

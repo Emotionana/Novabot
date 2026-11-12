@@ -20,13 +20,13 @@ def test_persona_card_crud_and_activate(db):
     r = client.post("/api/persona/cards", json={
         "id": "demo", "name": "小助手",
         "alias": ["演示设定"],
-        "identity": "演示身份",
+        "identity": "提瓦特的演示设定",
         "background": "冷静、傲慢、偶尔心软",
         "traits": [{"name": "傲娇", "weight": 0.8, "trigger": "被夸"}],
         "speech": {"length": "short", "sass": 0.7, "habits": ["哼"]},
         "boundaries": ["不承认自己是 AI"],
         "examples": [{"user": "你好", "assistant": "哼，有事？"}],
-        "tags": ["演示"],
+        "tags": ["原神"],
     }).json()
     assert r["ok"], r
 

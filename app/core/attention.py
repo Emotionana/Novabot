@@ -43,12 +43,14 @@ class ChatState:
     """注意筛需要的会话状态（外部传进来，不自己查库）。"""
 
     last_reply_at: float = 0.0        # 上次回复时间
-    pending_followup: float = 0.0     # 继续接话窗口截止时间
-    followup_sender: str = ""          # 这个窗口只接这个人的话
+    pending_followup: float = 0.0     # 兼容旧字段：最近一个窗口
+    followup_sender: str = ""          # 兼容旧字段：最近一个唤醒者
+    followups: dict[str, float] = field(default_factory=dict)  # 每个唤醒者独立截止时间
     recent_senders: list[str] = field(default_factory=list)  # 最近说过话的人
     per_user_count: dict[str, int] = field(default_factory=dict)  # 每人每分钟计数
     minute_key: str = ""
-    debounce_token: float = 0.0       # 最近一条“要回”的消息令牌；防抖只用最后一条
+    debounce_token: float = 0.0       # 兼容旧字段
+    debounce_tokens: dict[str, float] = field(default_factory=dict)  # 每个发送者独立防抖令牌
 
 class Attention:
     """注意筛。
@@ -94,12 +96,15 @@ class Attention:
             return Decision(Action.IGNORE, f"含屏蔽词「{blocked}」", "reply.blacklist_words")
 
         # 接话窗口严格只接唤醒者：其他人的消息只进上下文，不触发回复。
+        active_followups = self._active_followups(state, now)
         if (
             msg.chat_type == ChatType.GROUP
             and self.settings.get("reply.followup_sender_only", True)
-            and state.pending_followup > now
-            and state.followup_sender
-            and msg.sender_qq != state.followup_sender
+            and active_followups
+            and msg.sender_qq not in active_followups
+            and not self._is_called(
+                msg, text, last_bot_reply_id=last_bot_reply_id, bot_names=bot_names
+            )
         ):
             return Decision(Action.IGNORE, "接话窗口只接唤醒者", "followup_other_sender")
 
@@ -112,10 +117,10 @@ class Attention:
             if self.settings.get("reply.private_always"):
                 return Decision(Action.REPLY, "私聊", "reply.private_always", priority=90, importance=0.8)
             # 私聊不总是回 → 走群那套规则
-            return self._group_rules(msg, state, now, is_owner, text, last_bot_reply_id)
+            return self._group_rules(msg, state, now, is_owner, text, last_bot_reply_id, bot_names)
 
         # 5. 群聊
-        return self._group_rules(msg, state, now, is_owner, text, last_bot_reply_id)
+        return self._group_rules(msg, state, now, is_owner, text, last_bot_reply_id, bot_names)
 
     # -- 群聊规则 --------------------------------------------------------
 
@@ -148,7 +153,7 @@ class Attention:
             return Decision(Action.REPLY, "被叫到了", "called", priority=80, importance=0.9)
 
         # 继续接话窗口：窗口只由唤醒词开启，回复和普通消息都不续期
-        if state.pending_followup > now and self._is_followup(text, msg, state):
+        if self._is_followup(text, msg, state):
             d = self._check_limits(msg, state, now)
             if d:
                 return d
@@ -335,22 +340,29 @@ class Attention:
         except Exception:  # noqa: BLE001
             seconds = 0
         if seconds > 0:
-            state.pending_followup = now + seconds
-            state.followup_sender = msg.sender_qq
+            deadline = now + seconds
+            sender = str(msg.sender_qq or "")
+            state.followups[sender] = deadline
+            state.pending_followup = deadline
+            state.followup_sender = sender
+            state.followups = {k: v for k, v in state.followups.items() if v > now}
+
+    def _active_followups(self, state: ChatState, now: float) -> dict[str, float]:
+        active = {k: v for k, v in state.followups.items() if v > now}
+        if state.pending_followup > now and state.followup_sender:
+            active.setdefault(state.followup_sender, state.pending_followup)
+        return active
 
     def _is_followup(self, text: str, msg: InboundMessage, state: ChatState) -> bool:
-        """是不是在接着说。
-
-        注意：只接上一条被回复的那个人的话，别人插话不算继续，
-        否则群里会出现 bot 偶尔主动插话。
-        """
-        if not state.pending_followup or not state.followup_sender:
-            return False
-        if msg.sender_qq != state.followup_sender:
-            return False
-        if not state.recent_senders:
-            return False
-        return msg.sender_qq in state.recent_senders[-3:]
+        """这个发送者自己是否在接话窗口内；每个人窗口独立。"""
+        sender = str(msg.sender_qq or "")
+        now = msg.event_at or time.time()
+        if state.followups.get(sender, 0.0) > now:
+            return True
+        # 兼容旧字段/旧测试；新逻辑每个人窗口独立，不再要求最近发送者列表。
+        if state.followup_sender == sender and state.pending_followup > now:
+            return bool(state.recent_senders and sender in state.recent_senders[-10:])
+        return False
 
     def _hit_blocklist(self, text: str) -> str:
         for w in self.settings.get("reply.blacklist_words") or []:

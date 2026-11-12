@@ -18,3 +18,9 @@ def test_dsh_plugin_has_bundle_patch():
     assert "insert:" in text
     assert "name: dsh-novabot" in text
     assert (PLUGIN / "index.js").is_file()
+
+
+def test_dsh_plugin_blocks_interactive_question_tool():
+    text = (PLUGIN / "index.js").read_text(encoding="utf-8")
+    assert "ask_user_question" in text
+    assert "const deny = ['ask_user_question']" in text

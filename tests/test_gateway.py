@@ -22,7 +22,7 @@ def main() -> int:
         "message_type": "group",
         "self_id": 10002,
         "user_id": 10001,
-        "group_id": 573560374,
+        "group_id": 100001,
         "time": 1730000000,
         "sender": {"user_id": 10001, "nickname": "TestUser", "card": "主人", "role": "owner"},
         "message": [
@@ -33,7 +33,7 @@ def main() -> int:
     m = parse_event(ev)
     print(f"  chat_id={m.chat_id} 类型={m.chat_type} 发送者={m.sender_qq}({m.sender_card})")
     print(f"  文本={m.text!r} @={m.at_list} 级别={m.sender_level}")
-    assert m.chat_id == "group:573560374"
+    assert m.chat_id == "group:100001"
     assert m.chat_type == ChatType.GROUP
     assert m.sender_card == "主人"
     assert m.text == "小助手你在吗", f"正文不该带 @ 号：{m.text!r}"
@@ -146,3 +146,33 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_forward_nodes_are_flattened():
+    from app.gateway.bridge import flatten_forward_messages
+
+    nodes = [
+        {"sender": {"nickname": "A"}, "message": [{"type": "text", "data": {"text": "第一句"}}]},
+        {"sender": {"nickname": "B"}, "message": [{"type": "text", "data": {"text": "第二句"}}]},
+    ]
+    assert flatten_forward_messages(nodes) == "A: 第一句\nB: 第二句"
+
+
+def test_forward_id_is_fetched_into_message_text():
+    import asyncio
+    from types import SimpleNamespace
+
+    from app.gateway.manager import _expand_forward
+
+    class Client:
+        async def call(self, action, params, *, timeout=15):
+            assert action == "get_forward_msg"
+            assert params == {"id": "res-1"}
+            return {"data": {"messages": [
+                {"sender": {"nickname": "A"}, "message": [{"type": "text", "data": {"text": "内容"}}]}
+            ]}}
+
+    msg = SimpleNamespace(text="[合并转发]")
+    event = {"message": [{"type": "forward", "data": {"id": "res-1"}}]}
+    asyncio.run(_expand_forward(Client(), event, msg))
+    assert msg.text == "[合并转发]\nA: 内容"

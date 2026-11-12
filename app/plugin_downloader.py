@@ -179,7 +179,7 @@ class PluginDownloader:
     def installed_info(self, tool: str) -> list[dict]:
         meta = TOOLS.get(tool) or {}
         prefixes = meta.get("local_prefixes") or ()
-        roots = [Path("D:/dsh-plugins"), self.root.parent]
+        roots = [Path.home() / "dsh-plugins", self.root.parent]
         current = self._current_dir()
         seen: set[str] = set()
         found: list[dict] = []

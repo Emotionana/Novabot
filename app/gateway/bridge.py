@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -218,7 +219,8 @@ def _parse_segments(message) -> tuple[str, list[str], MsgType, list[MediaItem]]:
         elif t == "reply":
             has_reply = True
         elif t == "forward":
-            texts.append("[合并转发]")
+            inner = _flatten_forward(data)
+            texts.append(f"[合并转发]\n{inner}" if inner else "[合并转发]")
         elif t == "file":
             media.append(_media_item("file", data))
             texts.append("[文件]")
@@ -239,6 +241,98 @@ def _parse_segments(message) -> tuple[str, list[str], MsgType, list[MediaItem]]:
         mt = MsgType.TEXT
 
     return text, ats, mt, media
+
+
+def _segments_flat(segs, depth: int = 0) -> str:
+    """把一组消息段拼成纯文本，用于展开合并转发。"""
+    if not isinstance(segs, list) or depth > 3:
+        return ""
+    out: list[str] = []
+    for seg in segs:
+        if isinstance(seg, str):
+            out.append(seg)
+            continue
+        if not isinstance(seg, dict):
+            continue
+        t = seg.get("type")
+        data = seg.get("data") or {}
+        if t == "text":
+            out.append(str(data.get("text") or ""))
+        elif t == "image":
+            out.append("[图片]")
+        elif t in ("face", "mface"):
+            out.append("[表情]")
+        elif t == "record":
+            out.append("[语音]")
+        elif t == "video":
+            out.append("[视频]")
+        elif t == "node":
+            out.append(_segments_flat(data.get("content") or [], depth + 1))
+        elif t == "forward":
+            out.append(_flatten_forward(data, depth + 1) or "[合并转发]")
+        elif t == "json":
+            raw = data.get("data")
+            if isinstance(raw, str):
+                try:
+                    obj = json.loads(raw)
+                    out.append(str(obj.get("prompt") or (obj.get("meta") or {}).get("detail_1", {}).get("desc") or "[卡片]"))
+                except Exception:  # noqa: BLE001
+                    out.append("[卡片]")
+            else:
+                out.append("[卡片]")
+        elif t == "file":
+            out.append("[文件]")
+    return "".join(out)
+
+
+def flatten_forward_messages(messages) -> str:
+    """把 get_forward_msg 返回的节点数组展开成「昵称: 内容」。"""
+    if not isinstance(messages, list):
+        return ""
+    lines: list[str] = []
+    for node in messages[:80]:
+        if not isinstance(node, dict):
+            continue
+        sender = node.get("sender") if isinstance(node.get("sender"), dict) else {}
+        nick = str(
+            sender.get("card") or sender.get("nickname")
+            or node.get("nickname") or node.get("name") or ""
+        ).strip()
+        body = _segments_flat(node.get("message") or node.get("content") or [], 1).strip()
+        if body:
+            lines.append(f"{nick}: {body}" if nick else body)
+    return "\n".join(lines)
+
+
+def _flatten_forward(data: dict, depth: int = 0) -> str:
+    """把合并转发的节点展开成「昵称: 内容」的纯文本。
+
+    只有网关把 content 一并塞进 message 时才有东西可读；
+    只给了 id 的实现，这里返回空，仍退回占位符。
+    """
+    if not isinstance(data, dict) or depth > 3:
+        return ""
+    nodes = data.get("content")
+    if not isinstance(nodes, list):
+        return ""
+    lines: list[str] = []
+    for node in nodes[:50]:
+        if not isinstance(node, dict):
+            continue
+        nd = node.get("data") if isinstance(node.get("data"), dict) else node
+        nick = str(nd.get("nickname") or nd.get("name") or "").strip()
+        inner = nd.get("content")
+        if isinstance(inner, list):
+            body = _segments_flat(inner, depth + 1)
+        elif isinstance(inner, str):
+            body = inner
+        else:
+            body = ""
+        body = body.strip()
+        if not body:
+            continue
+        lines.append(f"{nick}: {body}" if nick else body)
+    return "\n".join(lines)
 
 
 def _parse_cq(message: str) -> tuple[str, list[str], MsgType, list[MediaItem]]:

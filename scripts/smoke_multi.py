@@ -35,7 +35,7 @@ from app.settings import Settings  # noqa: E402
 from app.web.accounts_api import AccountStore  # noqa: E402
 from scripts._procutil import cleanup_dir, kill_tree  # noqa: E402
 
-GROUP_ID = 573560374
+GROUP_ID = 100001
 USER_QQ = 10001
 ACCOUNTS = [
     ("acc-a", "10011", "A 号你好，我是来找 A 的"),

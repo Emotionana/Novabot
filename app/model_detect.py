@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import subprocess
 
 import httpx
 
@@ -50,6 +51,39 @@ def _dedupe(values) -> list[str]:
     return out
 
 
+def _listening_ports() -> list[int]:
+    """本机正在监听的 TCP 端口，用于发现 DSH 重启后随机换的新端口。"""
+    ports: set[int] = set()
+    try:
+        if os.name == "nt":
+            out = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True, text=True, encoding="mbcs", errors="replace", timeout=3,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            ).stdout
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) < 5 or parts[-2].upper() != "LISTENING":
+                    continue
+                local = parts[1]
+                port = int(local.rsplit(":", 1)[-1])
+                if 1024 < port < 65536:
+                    ports.add(port)
+        else:
+            out = subprocess.run(["ss", "-ltn"], capture_output=True, text=True, timeout=3).stdout
+            for line in out.splitlines()[1:]:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                port = int(parts[3].rsplit(":", 1)[-1])
+                if 1024 < port < 65536:
+                    ports.add(port)
+    except Exception:  # noqa: BLE001
+        return []
+    ports.discard(19100)
+    return sorted(ports)
+
+
 def candidates(db) -> list[str]:
     values: list[str] = []
     g = Settings(db)
@@ -88,6 +122,20 @@ async def probe(endpoint: str, *, client: httpx.AsyncClient | None = None) -> bo
             await client.aclose()
 
 
+async def discover(client: httpx.AsyncClient) -> str:
+    """扫描本机监听端口，找 /novabot/api/health 返回 Novabot 的 DSH。"""
+    ports = _listening_ports()
+    if not ports:
+        return ""
+    endpoints = [f"http://127.0.0.1:{p}/novabot/api/chat" for p in ports]
+    results = await asyncio.gather(*(probe(e, client=client) for e in endpoints), return_exceptions=True)
+    for endpoint, ok in zip(endpoints, results, strict=True):
+        if ok is True:
+            log.info("在本机端口发现 DSH：%s", endpoint)
+            return endpoint
+    return ""
+
+
 async def detect_and_apply(db, *, refresh=None) -> dict:
     """探测可用 Agent；成功后写入账号并尝试刷新运行中的 pipeline。"""
     found = ""
@@ -96,6 +144,8 @@ async def detect_and_apply(db, *, refresh=None) -> dict:
             if await probe(endpoint, client=client):
                 found = endpoint
                 break
+        if not found:
+            found = await discover(client)
     if not found:
         return {"ok": False, "error": "没有探测到可用的 Novabot Agent（DSH）", "endpoint": ""}
 
@@ -105,6 +155,8 @@ async def detect_and_apply(db, *, refresh=None) -> dict:
     settings.set("llm.agent_enabled", True)
     settings.set("llm.agent_type", "dsh")
     settings.set("llm.agent_endpoint", found)
+    with contextlib.suppress(Exception):
+        settings.set("platform.dsh_url", found.split("/novabot/api/", 1)[0])
 
     updated = []
     rows = db.query("SELECT id FROM accounts WHERE enabled = 1 ORDER BY sort_order, id") if db.table_exists("accounts") else []

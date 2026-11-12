@@ -187,7 +187,7 @@ function invalidateSession(payload, cfg) {
 function isSessionError(error) {
   const text = String(error?.message || error || '').toLowerCase()
   return ['session', '会话', 'archiv', '归档', 'not found', '不存在', 'closed',
-          '已关闭', 'disposed', 'invalid', '无效'].some((x) => text.includes(x))
+          '已关闭', 'disposed', 'invalid', '无效', 'blocked', '没有正常结束'].some((x) => text.includes(x))
 }
 
 function bumpSessionTurns(payload, session) {
@@ -438,7 +438,8 @@ function deniedToolsFor(permissions) {
   const p = permissions && typeof permissions === 'object'
     ? permissions
     : { read: true, write: false, delete: false, shell: false }
-  const deny = []
+  // QQ 没有交互式回答入口；这类工具会一直等到超时。
+  const deny = ['ask_user_question']
   for (const [cap, names] of Object.entries(TOOL_GROUPS)) {
     if (!p[cap]) deny.push(...names)
   }
@@ -607,13 +608,14 @@ async function askDsh(ctx, cfg, payload) {
       const text = round === 1 ? userText : '继续上一段任务，从上次中断处接着做，不要重复已经完成的步骤。'
       try {
         turn = await runAgentTurn(ctx, cfg, payload, ws, system, text, false, mode !== 'off')
+        if (turn.error) throw new Error(turn.error)
       } catch (e) {
         if (!isSessionError(e)) throw e
         console.warn(`DSH 会话不可用，切换新会话重试：${e?.message || e}`)
         invalidateSession(payload, cfg)
         turn = await runAgentTurn(ctx, cfg, payload, ws, system, text, true, mode !== 'off')
+        if (turn.error) throw new Error(turn.error)
       }
-      if (turn.error) throw new Error(turn.error)
       if (!turn.timed_out || mode !== 'auto' || round >= maxRounds) break
       // 本轮已取消；等 agent 真正空闲后自动开下一轮同一会话。
       try {
@@ -677,11 +679,25 @@ async function askDshVision(ctx, cfg, payload) {
   const image = payload.image || {}
   if (!image.data || !image.mimeType) throw new Error('缺少图片数据')
   const prompt = String(payload.prompt || '用中文简短描述这张图片。')
+  // DeepSeek Messages 不接受裸 base64 image block；必须先交给 DSH 附件库，
+  // 再把 durable attachment 引用放进 ImageBlock，4.1 Flash 才会把它当图片。
+  const attachments = ctx.get?.('attachments')
+  if (!attachments || typeof attachments.saveImages !== 'function') {
+    throw new Error('DSH 没有附件库，无法把图片交给视觉模型')
+  }
+  const refs = await attachments.saveImages([{
+    // saveImages 接收原始字节；base64 只属于 HTTP 传输层，不能直接交给 Sharp。
+    data: Buffer.from(String(image.data), 'base64'),
+    mediaType: String(image.mimeType),
+    name: payload.image.name || 'novabot-vision',
+  }])
+  const attachment = refs?.[0]
+  if (!attachment) throw new Error('DSH 附件库没有返回图片引用')
   const messages = [{
     role: 'user',
     content: [
       { type: 'text', text: prompt },
-      { type: 'image', data: String(image.data), mimeType: String(image.mimeType) },
+      { type: 'image', attachment },
     ],
   }]
   let out = ''

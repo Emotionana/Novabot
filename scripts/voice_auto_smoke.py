@@ -10,7 +10,7 @@
 
 用法：
     python -m scripts.voice_auto_smoke --url http://127.0.0.1:9880 \
-        --ref "C:\\path\\to\\ref.wav" \
+        --ref "C:\\path\\Videos\\ref.wav" \
         --prompt "参考音频对应的文本"
 """
 

@@ -65,12 +65,12 @@ defparam(
 defparam(
     "gateway.backend_command", "连接插件命令", "str", "",
     level="advanced", group="接入",
-    desc="例如 \"D:\\dsh-plugins\\SnowLuma-v2.4.0-win-x64\\node.exe\" index.mjs；留空不自启",
+    desc="例如 \"C:\\path\\to\\plugins\\SnowLuma-v2.4.0-win-x64\\node.exe\" index.mjs；留空不自启",
 )
 defparam(
     "gateway.backend_workdir", "连接插件工作目录", "str", "",
     level="advanced", group="接入",
-    desc="SnowLuma 的安装目录，例如 D:\\dsh-plugins\\SnowLuma-v2.4.0-win-x64",
+    desc="SnowLuma 的安装目录，例如 C:\\path\\to\\plugins\\SnowLuma-v2.4.0-win-x64",
 )
 defparam(
     "gateway.backend_check_port", "插件端口检查", "int", 3001,

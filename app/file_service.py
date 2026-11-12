@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -35,9 +36,10 @@ def safe_name(name: str, fallback: str = "file") -> str:
 
 
 class FileService:
-    def __init__(self, db, settings, account_id: str = ""):
+    def __init__(self, db, settings, account_id: str = "", *, media=None):
         self.db = db
         self.settings = settings
+        self.media = media
         self.account_id = account_id or getattr(settings, "account_id", "") or "default"
         safe = re.sub(r"[^\w.-]+", "_", str(self.account_id))[:80] or "default"
         self.root = Path(getattr(db, "path", ".")).parent / "files" / safe
@@ -138,10 +140,25 @@ class FileService:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
                 notes.append(f"【文件】{name}（{self._human_size(len(data))}，已接收）")
+                # 截图/图片文件也要读字；单靠 [文件] 标记模型看不到图。
+                ext = Path(name).suffix.lower()
+                if self.media is not None and ext in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
+                    try:
+                        mime2 = mime if str(mime or "").startswith("image/") else (f"image/{ext.lstrip('.')}" if ext != ".jpg" else "image/jpeg")
+                        desc = await self.media.vision_text(
+                            data, mime2,
+                            "先逐字抄写图中所有可见文字，保留换行；再简短描述画面。没有文字就说没有文字。",
+                            max_tokens=800,
+                        )
+                        if desc:
+                            notes.append(f"【图片文字】{name}\n{desc}")
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("图片文件识别失败：%s", e or type(e).__name__)
                 self._audit(msg, "receive", name, True, "")
             except Exception as e:  # noqa: BLE001
-                log.warning("文件接收失败：%s", e)
-                notes.append(f"【文件】{name}（未接收：{str(e)[:100]}）")
+                reason = str(e) or type(e).__name__
+                log.warning("文件接收失败：%s", reason)
+                notes.append(f"【文件】{name}（未接收：{reason[:100]}）")
                 self._audit(msg, "receive", name, False, str(e))
         return "\n".join(notes)
 
@@ -153,15 +170,23 @@ class FileService:
             return data[:limit], item.mime
         if not item.url.startswith(("http://", "https://")):
             raise RuntimeError("没有可下载的文件地址")
-        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as c, \
-                c.stream("GET", item.url, headers={"User-Agent": "Novabot/0.1"}) as r:
-            r.raise_for_status()
-            chunks = bytearray()
-            async for chunk in r.aiter_bytes(65536):
-                chunks.extend(chunk)
-                if len(chunks) > limit:
-                    raise RuntimeError("文件超过大小上限")
-            return bytes(chunks), r.headers.get("content-type", "")
+        last = None
+        for attempt in range(2):
+            try:
+                async with httpx.AsyncClient(timeout=120, follow_redirects=True) as c, \
+                        c.stream("GET", item.url, headers={"User-Agent": "Novabot/0.1"}) as r:
+                    r.raise_for_status()
+                    chunks = bytearray()
+                    async for chunk in r.aiter_bytes(65536):
+                        chunks.extend(chunk)
+                        if len(chunks) > limit:
+                            raise RuntimeError("文件超过大小上限")
+                    return bytes(chunks), r.headers.get("content-type", "")
+            except Exception as e:  # noqa: BLE001
+                last = e
+                if attempt == 0:
+                    await asyncio.sleep(0.5)
+        raise RuntimeError(str(last) or type(last).__name__)
 
     # ---------- 发送 ----------
     def upload(self, filename: str, data: bytes) -> dict:

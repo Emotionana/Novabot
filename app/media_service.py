@@ -33,8 +33,9 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 VISION_MAX_SIDE = 1600
 
 VISION_PROMPT = (
-    "用中文简短描述这张图片/表情包：画面里有什么、有没有文字、整体情绪是什么。"
-    "不要编造看不见的细节，不要输出 Markdown。"
+    "先逐字抄写图片/表情包里所有可见文字，保留原有换行；没有文字就明确说没有文字。"
+    "再简短描述画面里有什么、整体情绪是什么。"
+    "不要漏字，不要编造看不见的细节，不要输出 Markdown。"
 )
 
 
@@ -276,7 +277,7 @@ class MediaService:
             try:
                 text = await self._dsh_vision(data, mime, prompt, max_tokens=max_tokens)
                 if text:
-                    return text
+                    return await self._with_ocr(data, mime, text)
             except Exception as e:  # noqa: BLE001
                 log.warning("DSH 视觉失败，回退单独视觉接口：%s", e)
         cfg = self._vision_config(mode, kind)
@@ -308,10 +309,53 @@ class MediaService:
                 text = msg.get("content") or ""
                 if isinstance(text, list):
                     text = "".join(x.get("text", "") for x in text if isinstance(x, dict))
-                return str(text).strip()[:1200]
+                return await self._with_ocr(data, mime, str(text).strip()[:1200])
         except Exception as e:  # noqa: BLE001
             log.warning("视觉识别失败：%s", e)
             return "视觉识别失败"
+
+    async def _with_ocr(self, data: bytes, mime: str, text: str) -> str:
+        ocr = await self._ocr_text(data, mime)
+        text = str(text or "").strip()
+        if ocr and ocr not in text:
+            return (text + "\n【图中文字】\n" + ocr).strip()
+        return text
+
+    async def _ocr_text(self, data: bytes, mime: str) -> str:
+        """本地 Qwen OCR：只提取文字，调用后立即卸载模型。"""
+        cfg = self._vision_config("custom", "image")
+        if cfg is None:
+            return ""
+        base, key, model = cfg
+        payload = {
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "逐字抄写图片中所有可见文字，保留换行。只输出文字；没有文字就输出“没有文字”。"},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(data).decode()}"}},
+                ],
+            }],
+            "max_tokens": 800,
+            "temperature": 0,
+            "keep_alive": "0s",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=120) as c:
+                headers = {"Content-Type": "application/json"}
+                if key:
+                    headers["Authorization"] = f"Bearer {key}"
+                r = await c.post(base.rstrip("/") + "/chat/completions", json=payload, headers=headers)
+                if r.status_code != 200:
+                    return ""
+                msg = ((r.json().get("choices") or [{}])[0].get("message") or {})
+                text = msg.get("content") or ""
+                if isinstance(text, list):
+                    text = "".join(x.get("text", "") for x in text if isinstance(x, dict))
+                return str(text).strip()[:2000]
+        except Exception as e:  # noqa: BLE001
+            log.debug("本地 OCR 失败：%s", e)
+            return ""
 
     async def _dsh_vision(self, data: bytes, mime: str, prompt: str, *, max_tokens: int = 500) -> str:
         """把图片直接交给当前 DSH Agent 的模型。"""
@@ -348,6 +392,12 @@ class MediaService:
                 if not model:
                     return None
                 return custom, str(self._kind_value(kind, "api_key", "") or ""), model
+        if mode in ("custom", "chat", "dsh"):
+            # 没有单独的视觉接口时，回退到全局视觉模型（例如本地 Qwen）。
+            base = str(self._get("media.vision_base_url", "") or "").strip()
+            model = str(self._get("media.vision_model", "") or "").strip()
+            if base and model:
+                return base, str(self._get("media.vision_api_key", "") or ""), model
         if mode == "chat":
             # OpenAI 兼容的聊天适配器可以直接复用 base_url/model
             base = str(getattr(self.llm, "base_url", "") or "").strip()

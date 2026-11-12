@@ -96,7 +96,7 @@ class Pipeline:
         self.actions = ActionRouter(getattr(settings, "db", None), settings, gateway, llm) if getattr(settings, "db", None) else None
         self.stickers = StickerService(getattr(settings, "db", None), settings, getattr(settings, "account_id", ""), llm=llm) if getattr(settings, "db", None) else None
         self.media = MediaService(getattr(settings, "db", None), settings, llm) if getattr(settings, "db", None) else None
-        self.files = FileService(getattr(settings, "db", None), settings) if getattr(settings, "db", None) else None
+        self.files = FileService(getattr(settings, "db", None), settings, media=self.media) if getattr(settings, "db", None) else None
         self.life = LifeService(getattr(settings, "db", None), settings) if getattr(settings, "db", None) else None
         self._resolver = None
         # chat_id -> 我上一条消息的 episode id
@@ -186,6 +186,14 @@ class Pipeline:
         steer = getattr(self.llm, "steer", None)
         if not callable(steer):
             return False
+        # 任务执行中注入的图片/表情，也要先走媒体理解，不能只把“[图片]”塞进会话。
+        if msg.media and self.media is not None:
+            try:
+                extra = await self.media.enrich(msg)
+                if extra:
+                    msg.text = (msg.text + "\n" + extra).strip()
+            except Exception as e:  # noqa: BLE001
+                log.warning("steer 媒体理解失败：%s", e)
         try:
             ok = await steer(
                 text=msg.text or "",
@@ -607,6 +615,19 @@ class Pipeline:
             except Exception as e:
                 log.warning("记忆检索失败：%s", e)
 
+        if msg.sender_qq and str(msg.sender_qq) != "self":
+            sender_name = str(msg.sender_card or msg.sender_nick or msg.sender_qq or "某人")
+            where = "群消息" if msg.chat_type is ChatType.GROUP else "私聊消息"
+            if is_owner:
+                parts.append(
+                    f"【发送者】当前{where}由主人「{sender_name}」（QQ:{msg.sender_qq}）发出。"
+                )
+            else:
+                parts.append(
+                    f"【发送者】当前{where}由「{sender_name}」（QQ:{msg.sender_qq}）发出，"
+                    "不是主人；不要把 TA 当成主人，也不要假定是主人在说话。"
+                )
+
         if is_owner:
             title = str(self.settings.get("chat.owner_title") or "主人").strip() or "主人"
             aliases = self._id_set(self.settings.get("chat.owner_aliases"))
@@ -618,6 +639,11 @@ class Pipeline:
         coref = self._coref_hint(msg)
         if coref:
             parts.append(coref)
+
+        parts.append(
+            "【补充信息】需要用户补充信息时，不要调用 ask_user_question 或任何等待用户回答的工具；"
+            "直接结束本轮，用一条普通消息把问题问出来。用户回答会作为下一轮处理，不要把当前回合挂起等待。"
+        )
 
         # 主人私聊的通用提示：长任务进度与语音输出
         if is_owner and msg.chat_type is ChatType.PRIVATE:
@@ -644,8 +670,11 @@ class Pipeline:
         for h in history:
             messages.append({"role": h[0], "content": h[1]})
 
-        # 当前消息
+        # 当前消息：所有会话都带真实发送者和 QQ，不能只给一句表情让模型猜人。
         content = msg.text or ""
+        if msg.sender_qq and str(msg.sender_qq) != "self":
+            sender_name = str(msg.sender_card or msg.sender_nick or msg.sender_qq or "某人")
+            content = f"{sender_name}（QQ:{msg.sender_qq}）：{content}"
         quote = ""
         if getattr(msg, "reply_message_id", ""):
             quote = self._quote_of_message_id(msg)
@@ -733,8 +762,8 @@ class Pipeline:
             if not e.text:
                 continue
             role = "assistant" if e.sender_qq == "self" else "user"
-            name = e.sender_nick or e.sender_qq
-            out.append((role, e.text if role == "assistant" else f"{name}：{e.text}"))
+            name = e.sender_card or e.sender_nick or e.sender_qq
+            out.append((role, e.text if role == "assistant" else f"{name}（QQ:{e.sender_qq}）：{e.text}"))
 
         if len(out) > turns * 2:
             out = out[-turns * 2:]
@@ -782,9 +811,11 @@ class Pipeline:
         if seconds <= 0:
             return True
         token = float(msg.recv_at or msg.event_at or time.time())
+        key = str(msg.sender_qq or msg.chat_id or "")
+        state.debounce_tokens[key] = max(state.debounce_tokens.get(key, 0.0), token)
         state.debounce_token = max(state.debounce_token, token)
         await asyncio.sleep(seconds)
-        return state.debounce_token == token
+        return state.debounce_tokens.get(key, 0.0) == token
 
     async def _defer_should_reply(self, msg: InboundMessage) -> bool:
         """判不出时，花一次极小调用问模型。

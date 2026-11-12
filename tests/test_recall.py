@@ -74,8 +74,8 @@ def main() -> int:
         text="做后端开发", tier=2, valid_from=now - 86400 * 30,
     ))
     cortex.write_fact(Fact(
-        account_id=ACC, subject_id=QQ, predicate="喜欢", object="示例主题",
-        text="喜欢玩示例主题", tier=3, valid_from=now - 86400 * 10,
+        account_id=ACC, subject_id=QQ, predicate="喜欢", object="原神",
+        text="喜欢玩原神", tier=3, valid_from=now - 86400 * 10,
     ))
     cortex.write_fact(Fact(
         account_id=ACC, subject_id=QQ, predicate="名字", object="TestUser",

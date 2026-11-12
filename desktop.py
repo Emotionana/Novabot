@@ -21,6 +21,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 ICON = ROOT / "assets" / "novabot.ico"
+BACKEND_PY = ROOT / ".venv" / "Scripts" / "pythonw.exe"
+
 
 import webview  # noqa: E402
 
@@ -98,7 +100,8 @@ class Desktop:
         err = (logs / "desktop-server.err.log").open("ab")
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(self.port)],
+            [str(BACKEND_PY if BACKEND_PY.is_file() else sys.executable),
+             "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(self.port)],
             cwd=str(ROOT),
             stdin=subprocess.DEVNULL,
             stdout=out,
@@ -159,16 +162,14 @@ class Desktop:
                 self.window.destroy()
 
     def run(self) -> int:
-        if _already_running(self.port):
-            _message(f"Novabot 已经在 {self.port} 端口运行。")
-            return 0
-        if not _port_free(self.port):
+        existing = _already_running(self.port)
+        if not existing and not _port_free(self.port):
             port = _next_free_port(self.port + 1)
             if not port:
                 _message(f"端口 {self.port} 被占用，附近也没有空闲端口。")
                 return 1
             self.port = port
-        if not self.start_server():
+        if not existing and not self.start_server():
             return 1
         self.window = webview.create_window(
             "Novabot",
@@ -189,6 +190,14 @@ class Desktop:
                 storage_path=str(ROOT / "data" / "webview"),
                 icon=str(ICON) if ICON.is_file() else None,
             )
+        except Exception:
+            log_path = ROOT / "data" / "logs" / "desktop-ui.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+                import traceback
+                traceback.print_exc(file=f)
+            return 1
         finally:
             self.stop_server()
         return 0

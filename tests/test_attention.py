@@ -188,9 +188,49 @@ def test_followup_window_only_replies_to_waker(db, settings):
     assert first.action == Action.REPLY
     state.recent_senders = ["111"]
 
-    other = attn.judge(mk_msg("小助", sender="222"), state)
+    other = attn.judge(mk_msg("继续", sender="222"), state)
     assert other.action == Action.IGNORE
     assert other.rule == "followup_other_sender"
 
-    same = attn.judge(mk_msg("继续", sender="111"), state)
-    assert same.action == Action.REPLY
+    # 另一个人明确唤醒，应该能再开一个窗口，而不是覆盖/吞掉 A。
+    other_wake = attn.judge(mk_msg("小助", sender="222"), state)
+    assert other_wake.action == Action.REPLY
+    assert set(state.followups) == {"111", "222"}
+
+    old_sender = attn.judge(mk_msg("继续", sender="111"), state)
+    assert old_sender.action == Action.REPLY
+
+
+def test_owner_can_reawaken_during_other_followup(db, settings):
+    import app.params  # noqa: F401
+    from app.core.attention import Action, Attention, ChatState
+
+    settings.set("gateway.bot_qq", "10002")
+    settings.set("reply.wake_words", ["小助"])
+    settings.set("reply.followup_sec", 30)
+    settings.set("reply.followup_sender_only", True)
+    settings.set("reply.group_rate_max_msgs", 0)
+    settings.set("reply.group_mode", "mention")
+
+    attn = Attention(settings)
+    state = ChatState()
+    attn.judge(mk_msg("小助", sender="111"), state, bot_names=["小助"])
+    state.recent_senders = ["111"]
+
+    owner = attn.judge(mk_msg("小助", sender="10001"), state, is_owner=True, bot_names=["小助"])
+    assert owner.action == Action.REPLY
+
+
+def test_persona_alias_wakes_without_legacy_wake_words(db, settings):
+    import app.params  # noqa: F401
+    from app.core.attention import Action, Attention, ChatState
+
+    settings.set("gateway.bot_qq", "10002")
+    settings.set("reply.wake_words", [])
+    settings.set("reply.group_mode", "mention")
+    settings.set("reply.group_rate_max_msgs", 0)
+
+    d = Attention(settings).judge(
+        mk_msg("乙乙"), ChatState(), bot_names=["助手乙", "乙乙"]
+    )
+    assert d.action == Action.REPLY

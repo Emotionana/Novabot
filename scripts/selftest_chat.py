@@ -25,8 +25,6 @@ from app.persona import PersonaSystem
 from app.settings import Settings
 
 DB = Path("data/novabot.db")
-
-
 def load_accounts(db: Database) -> list[tuple[str, str]]:
     """从数据库读已启用的账号；空库时返回空列表。"""
     rows = db.query(

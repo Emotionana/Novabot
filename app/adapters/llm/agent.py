@@ -233,7 +233,8 @@ class AgentAdapter(BaseAdapter):
     def _is_session_error(text: str) -> bool:
         low = str(text or "").casefold()
         needles = ("session", "会话", "archiv", "归档", "not found", "不存在",
-                   "closed", "已关闭", "disposed", "invalid session", "无效")
+                   "closed", "已关闭", "disposed", "invalid session", "无效",
+        "blocked", "没有正常结束")
         return any(x in low for x in needles)
 
     def _parse(self, data: dict, session_id: str, account_id: str) -> Reply:

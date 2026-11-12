@@ -16,11 +16,36 @@ from dataclasses import dataclass
 
 from ..access_service import AccessService
 from ..models import ChatType
-from .bridge import parse_event, split_message, to_outbound
+from .bridge import flatten_forward_messages, parse_event, split_message, to_outbound
 from .onebot import OneBotClient, OneBotConfig, OneBotError
 from .progress import ProgressTurn
 
 log = logging.getLogger(__name__)
+
+
+async def _expand_forward(client, event: dict, msg) -> None:
+    """合并转发只给 id 时，调 get_forward_msg 把节点展开进文本。"""
+    if client is None or str(getattr(msg, "text", "") or "").strip() != "[合并转发]":
+        return
+    segments = event.get("message")
+    if not isinstance(segments, list):
+        return
+    forward_id = ""
+    for seg in segments:
+        if isinstance(seg, dict) and seg.get("type") == "forward":
+            data = seg.get("data") if isinstance(seg.get("data"), dict) else {}
+            forward_id = str(data.get("id") or data.get("resid") or "").strip()
+            break
+    if not forward_id:
+        return
+    try:
+        data = await client.call("get_forward_msg", {"id": forward_id}, timeout=15)
+        nodes = (data.get("data") or {}).get("messages") if isinstance(data.get("data"), dict) else None
+        text = flatten_forward_messages(nodes or [])
+        if text:
+            msg.text = f"[合并转发]\n{text}"
+    except Exception as e:  # noqa: BLE001
+        log.warning("合并转发展开失败：%s", e or type(e).__name__)
 
 
 @dataclass
@@ -246,6 +271,7 @@ class GatewayManager:
                 return
 
             msg.account_id = acc_id
+            await _expand_forward(rt.client, event, msg)
             try:
                 if await self.access.handle_message(acc_id, rt, msg):
                     return

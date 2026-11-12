@@ -42,9 +42,10 @@ def test_wake_window_is_not_refreshed_by_ordinary_messages():
     state = ChatState()
     attn = Attention(S())
     state.recent_senders = ["A"]
-    attn._arm_wake(state, _msg("A"), 1000)
-    assert state.pending_followup == 1008
+    now = time.time()
+    attn._arm_wake(state, _msg("A"), now)
     assert state.followup_sender == "A"
+    assert 7.5 < state.pending_followup - now < 8.5
     # 普通消息只读窗口，不会改截止时间
     assert attn._is_followup("接着说", _msg("A"), state) is True
-    assert state.pending_followup == 1008
+    assert 7.5 < state.pending_followup - now < 8.5

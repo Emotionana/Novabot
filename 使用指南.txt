@@ -1,5 +1,5 @@
 Novabot 使用指南
-版本：2026-11-09（schema v16）
+版本：2026-11-08（schema v16）
 适用：Windows，本机 127.0.0.1:19100
 维护约定：每次改功能、参数、命令、端口、数据库结构，必须同步更新本文件；测试会检查本文件是否覆盖当前 schema 版本。
 
@@ -324,9 +324,9 @@ C. TRAE / CodeBuddy MCP
 {
   "mcpServers": {
     "novabot": {
-      "command": "C:/path/to/Novabot/.venv/Scripts/python.exe",
+      "command": "C:\\path\\to\\Novabot\\.venv\\Scripts\\python.exe",
       "args": ["-m", "app.mcp_server"],
-      "env": {"NOVABOT_DATABASE__PATH": "C:/path/to/Novabot/data/novabot.db"}
+      "env": {"NOVABOT_DATABASE__PATH": "C:\\path\\to\\Novabot\\data\\novabot.db"}
     }
   }
 }

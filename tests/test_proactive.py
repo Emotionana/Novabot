@@ -384,7 +384,7 @@ def test_response_rate_smoothing(db):
 def test_group_only_person_is_not_candidate(db, settings, mem):
     """只在群里说过话的人，不主动私聊。"""
     seed_person(db)
-    db.execute("UPDATE episodes SET chat_id = 'group:573560374'")
+    db.execute("UPDATE episodes SET chat_id = 'group:100001'")
     svc, manager = make_service(db, settings, mem)
 
     assert svc._collect(ACC, settings, NOW) == []

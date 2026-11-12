@@ -70,6 +70,14 @@ def start_backend(db, *, command: str = "", workdir: str = "", port: int = 0) ->
         with log_path.open("ab") as out:
             out.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] start: {command} (cwd={cwd})\n".encode())
             out.flush()
+            update_root = Path(getattr(db, "path", ".")).parent / "tmp" / "snowluma-update-root"
+            update_root.mkdir(parents=True, exist_ok=True)
+            env = {
+                **os.environ,
+                "SNOWLUMA_HOOK_AUTOLOAD": "1",
+                "SNOWLUMA_UPDATE_CHECK": "0",
+                "SNOWLUMA_UPDATE_ROOT": str(update_root),
+            }
             proc = subprocess.Popen(
                 command,
                 cwd=cwd,
@@ -77,6 +85,7 @@ def start_backend(db, *, command: str = "", workdir: str = "", port: int = 0) ->
                 stdin=subprocess.DEVNULL,
                 stdout=out,
                 stderr=subprocess.STDOUT,
+                env=env,
                 creationflags=flags,
                 close_fds=True,
             )

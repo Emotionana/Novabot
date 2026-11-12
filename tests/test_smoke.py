@@ -33,9 +33,9 @@ def main() -> int:
     msg = InboundMessage(
         platform="qq",
         account_id="default",
-        chat_id="group:573560374",
+        chat_id="group:100001",
         chat_type=ChatType.GROUP,
-        group_id="573560374",
+        group_id="100001",
         group_name="测试群",
         sender_qq="10001",
         sender_nick="TestUser",
@@ -49,7 +49,7 @@ def main() -> int:
     ep = mem.hippocampus.get(ep_id)
     assert ep is not None
     assert ep.text == "今天天气不错"
-    assert ep.group_id == "573560374"
+    assert ep.group_id == "100001"
     print(f"  读回：{ep.sender_nick} 在 {ep.group_name} 说「{ep.text}」")
 
     # chats / people 自动建了
@@ -67,9 +67,9 @@ def main() -> int:
     # 再写一条，看看统计涨没涨
     msg2 = InboundMessage(
         account_id="default",
-        chat_id="group:573560374",
+        chat_id="group:100001",
         chat_type=ChatType.GROUP,
-        group_id="573560374",
+        group_id="100001",
         sender_qq="10001",
         sender_nick="TestUser",
         text="不过有点热",

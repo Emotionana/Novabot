@@ -85,7 +85,7 @@ def _migrate_v14(db: Database) -> None:
           last_seen = MAX(person_group_names.last_seen, excluded.last_seen)
         """
     )
-    # 旧 card_hist 也回填（历史导入的数据）
+    # 旧 card_hist 也回填（早期导入的数据）
     for row in db.query("SELECT qq, account_id, card_hist FROM people WHERE card_hist IS NOT NULL"):
         try:
             cards = __import__("json").loads(row["card_hist"] or "[]")

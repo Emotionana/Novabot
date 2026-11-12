@@ -2679,7 +2679,7 @@ function openPersonaModal(card) {
       h('div', { class: 'persona-form-grid' },
         field('名字', name), field('ID', id)),
       field('别名', alias.el, '别人怎么叫你；可空'),
-      field('标签', tags.el, '用于分类，比如：工作 / 角色 / 助手')),
+      field('标签', tags.el, '用于分类，比如：原神 / 傲娇 / 工作助手')),
     section('身份与背景', '这两段会直接进入 system prompt，写得越具体越稳定。',
       field('身份 / 自我认知', identity, personaCounter(identity)),
       field('背景', background, personaCounter(background))),
